@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface: 240 6% 6%;
+  --surface-elevated: 240 5% 12%;
+  --foreground: 0 0% 98%;
+  --muted: 240 4% 46%;
+  --border: 240 4% 16%;
+  --accent: 346 77% 50%;
+}
+
+.light {
+  --surface: 0 0% 98%;
+  --surface-elevated: 0 0% 100%;
+  --foreground: 240 10% 4%;
+  --muted: 240 4% 46%;
+  --border: 240 6% 90%;
+}
+
+@layer base {
+  * {
+    @apply border-[hsl(var(--border))];
+  }
+  body {
+    @apply bg-[hsl(var(--surface))] text-[hsl(var(--foreground))] antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+  .glass-light {
+    @apply bg-black/5 backdrop-blur-xl border border-black/10;
+  }
+  .text-gradient {
+    @apply bg-gradient-to-r from-rose-400 via-pink-300 to-amber-200 bg-clip-text text-transparent;
+  }
+}

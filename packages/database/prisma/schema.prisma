@@ -1,0 +1,611 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  EVENT_ORGANIZER
+  THEATRE_OWNER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AuthProvider {
+  EMAIL
+  PHONE
+  GOOGLE
+  APPLE
+}
+
+enum EventType {
+  MOVIE
+  CONCERT
+  COMEDY
+  WORKSHOP
+  FESTIVAL
+  SPORTS
+  EXPERIENCE
+}
+
+enum EventStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum SeatCategory {
+  REGULAR
+  PREMIUM
+  GOLD
+  PLATINUM
+  RECLINER
+  VIP
+}
+
+enum SeatStatus {
+  AVAILABLE
+  LOCKED
+  BOOKED
+  BLOCKED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentMethod {
+  RAZORPAY
+  STRIPE
+  UPI
+  WALLET
+  CARD
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  PAYMENT_SUCCESS
+  EVENT_REMINDER
+  REFUND_PROCESSED
+  PROMO
+  SYSTEM
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String?      @unique
+  phone         String?      @unique
+  passwordHash  String?
+  name          String?
+  avatar        String?
+  role          UserRole     @default(CUSTOMER)
+  authProvider  AuthProvider @default(EMAIL)
+  emailVerified Boolean      @default(false)
+  phoneVerified Boolean      @default(false)
+  cityId        String?
+  city          City?        @relation(fields: [cityId], references: [id])
+  walletBalance Decimal      @default(0) @db.Decimal(12, 2)
+  loyaltyPoints Int          @default(0)
+  referralCode  String?      @unique
+  referredById  String?
+  locale        String       @default("en")
+  preferences   Json?
+  deletedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  sessions       Session[]
+  bookings       Booking[]
+  reviews        Review[]
+  notifications  Notification[]
+  behaviors      UserBehavior[]
+  walletTxns     WalletTransaction[]
+  organizedEvents Event[]       @relation("OrganizerEvents")
+  ownedTheatres  Theatre[]      @relation("TheatreOwner")
+  waitlists      Waitlist[]
+  auditLogs      AuditLog[]
+
+  @@index([role])
+  @@index([cityId])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  deviceInfo   String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model OtpVerification {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, expiresAt])
+  @@map("otp_verifications")
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  state     String
+  country   String   @default("IN")
+  latitude  Float?
+  longitude Float?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users    User[]
+  venues   Venue[]
+  theatres Theatre[]
+  movies   MovieCity[]
+
+  @@index([slug])
+  @@map("cities")
+}
+
+model Movie {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  description String?   @db.Text
+  posterUrl   String?
+  bannerUrl   String?
+  trailerUrl  String?
+  duration    Int
+  language    String[]
+  genres      String[]
+  rating      String?
+  releaseDate DateTime?
+  imdbRating  Float?
+  trending    Boolean   @default(false)
+  metadata    Json?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  showtimes Showtime[]
+  reviews   Review[]
+  cities    MovieCity[]
+
+  @@index([slug])
+  @@index([trending])
+  @@index([releaseDate])
+  @@index([deletedAt])
+  @@map("movies")
+}
+
+model MovieCity {
+  id      String @id @default(cuid())
+  movieId String
+  cityId  String
+  movie   Movie  @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  city    City   @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@unique([movieId, cityId])
+  @@map("movie_cities")
+}
+
+model Event {
+  id           String      @id @default(cuid())
+  title        String
+  slug         String      @unique
+  description  String?     @db.Text
+  type         EventType
+  status       EventStatus @default(DRAFT)
+  posterUrl    String?
+  bannerUrl    String?
+  venueId      String?
+  venue        Venue?      @relation(fields: [venueId], references: [id])
+  organizerId  String
+  organizer    User        @relation("OrganizerEvents", fields: [organizerId], references: [id])
+  startAt      DateTime
+  endAt        DateTime?
+  cityId       String?
+  tags         String[]
+  artists      String[]
+  minPrice     Decimal?    @db.Decimal(10, 2)
+  maxPrice     Decimal?    @db.Decimal(10, 2)
+  capacity     Int?
+  waitlistEnabled Boolean  @default(false)
+  metadata     Json?
+  deletedAt    DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  showtimes Showtime[]
+  reviews   Review[]
+  waitlists Waitlist[]
+
+  @@index([slug])
+  @@index([type, status])
+  @@index([startAt])
+  @@index([organizerId])
+  @@index([deletedAt])
+  @@map("events")
+}
+
+model Venue {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  address   String
+  cityId    String
+  city      City     @relation(fields: [cityId], references: [id])
+  latitude  Float?
+  longitude Float?
+  capacity  Int?
+  imageUrl  String?
+  mapLayout Json?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  events   Event[]
+  theatres Theatre[]
+
+  @@index([cityId])
+  @@index([slug])
+  @@map("venues")
+}
+
+model Theatre {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  address   String
+  cityId    String
+  city      City     @relation(fields: [cityId], references: [id])
+  venueId   String?
+  venue     Venue?   @relation(fields: [venueId], references: [id])
+  ownerId   String?
+  owner     User?    @relation("TheatreOwner", fields: [ownerId], references: [id])
+  amenities String[]
+  imageUrl  String?
+  rating    Float?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  screens Screen[]
+
+  @@index([cityId])
+  @@index([ownerId])
+  @@map("theatres")
+}
+
+model Screen {
+  id        String   @id @default(cuid())
+  theatreId String
+  theatre   Theatre  @relation(fields: [theatreId], references: [id], onDelete: Cascade)
+  name      String
+  capacity  Int
+  layout    Json
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  seats     Seat[]
+  showtimes Showtime[]
+
+  @@index([theatreId])
+  @@map("screens")
+}
+
+model Seat {
+  id         String       @id @default(cuid())
+  screenId   String
+  screen     Screen       @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  row        String
+  number     Int
+  category   SeatCategory @default(REGULAR)
+  basePrice  Decimal      @db.Decimal(10, 2)
+  status     SeatStatus   @default(AVAILABLE)
+  lockedBy   String?
+  lockedAt   DateTime?
+  lockExpiry DateTime?
+
+  bookingSeats BookingSeat[]
+
+  @@unique([screenId, row, number])
+  @@index([screenId, status])
+  @@index([lockExpiry])
+  @@map("seats")
+}
+
+model Showtime {
+  id         String    @id @default(cuid())
+  movieId    String?
+  movie      Movie?    @relation(fields: [movieId], references: [id])
+  eventId    String?
+  event      Event?    @relation(fields: [eventId], references: [id])
+  screenId   String?
+  screen     Screen?   @relation(fields: [screenId], references: [id])
+  startAt    DateTime
+  endAt      DateTime?
+  language   String?
+  format     String?
+  basePrice  Decimal   @db.Decimal(10, 2)
+  dynamicPricing Json?
+  available  Int?
+  sold       Int       @default(0)
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  bookings Booking[]
+
+  @@index([movieId, startAt])
+  @@index([eventId, startAt])
+  @@index([screenId, startAt])
+  @@map("showtimes")
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  bookingRef    String        @unique @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  showtimeId    String
+  showtime      Showtime      @relation(fields: [showtimeId], references: [id])
+  status        BookingStatus @default(PENDING)
+  subtotal      Decimal       @db.Decimal(12, 2)
+  discount      Decimal       @default(0) @db.Decimal(12, 2)
+  tax           Decimal       @default(0) @db.Decimal(12, 2)
+  total         Decimal       @db.Decimal(12, 2)
+  couponId      String?
+  coupon        Coupon?       @relation(fields: [couponId], references: [id])
+  expiresAt     DateTime?
+  confirmedAt   DateTime?
+  cancelledAt   DateTime?
+  metadata      Json?
+  deletedAt     DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  seats    BookingSeat[]
+  fnbItems BookingFnb[]
+  payment  Payment?
+  ticket   Ticket?
+
+  @@index([userId])
+  @@index([showtimeId])
+  @@index([status])
+  @@index([bookingRef])
+  @@map("bookings")
+}
+
+model BookingSeat {
+  id        String  @id @default(cuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  seatId    String
+  seat      Seat    @relation(fields: [seatId], references: [id])
+  price     Decimal @db.Decimal(10, 2)
+
+  @@unique([bookingId, seatId])
+  @@index([seatId])
+  @@map("booking_seats")
+}
+
+model FnbItem {
+  id          String   @id @default(cuid())
+  theatreId   String?
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  imageUrl    String?
+  category    String
+  active      Boolean  @default(true)
+
+  bookingItems BookingFnb[]
+
+  @@map("fnb_items")
+}
+
+model BookingFnb {
+  id        String  @id @default(cuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fnbItemId String
+  fnbItem   FnbItem @relation(fields: [fnbItemId], references: [id])
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+
+  @@map("booking_fnb")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  bookingId       String        @unique
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  amount          Decimal       @db.Decimal(12, 2)
+  currency        String        @default("INR")
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  providerOrderId String?
+  providerPaymentId String?
+  refundAmount    Decimal?      @db.Decimal(12, 2)
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([status])
+  @@index([providerPaymentId])
+  @@map("payments")
+}
+
+model Ticket {
+  id          String   @id @default(cuid())
+  bookingId   String   @unique
+  booking     Booking  @relation(fields: [bookingId], references: [id])
+  qrCode      String   @unique
+  qrSecret    String
+  pdfUrl      String?
+  checkedIn   Boolean  @default(false)
+  checkedInAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([qrCode])
+  @@map("tickets")
+}
+
+model Coupon {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  description   String?
+  discountType  String
+  discountValue Decimal   @db.Decimal(10, 2)
+  minAmount     Decimal?  @db.Decimal(10, 2)
+  maxDiscount   Decimal?  @db.Decimal(10, 2)
+  usageLimit    Int?
+  usedCount     Int       @default(0)
+  validFrom     DateTime
+  validUntil    DateTime
+  active        Boolean   @default(true)
+  eventTypes    String[]
+
+  bookings Booking[]
+
+  @@index([code, active])
+  @@map("coupons")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  movieId   String?
+  movie     Movie?   @relation(fields: [movieId], references: [id])
+  eventId   String?
+  rating    Int
+  comment   String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([movieId])
+  @@index([userId])
+  @@map("reviews")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model Banner {
+  id        String   @id @default(cuid())
+  title     String
+  imageUrl  String
+  linkUrl   String?
+  position  Int      @default(0)
+  active    Boolean  @default(true)
+  cityId    String?
+  startAt   DateTime?
+  endAt     DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([active, position])
+  @@map("banners")
+}
+
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Decimal  @db.Decimal(12, 2)
+  type        String
+  description String?
+  referenceId String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@map("wallet_transactions")
+}
+
+model UserBehavior {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  sessionId String?
+  action    String
+  entityType String?
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("user_behaviors")
+}
+
+model Waitlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id])
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+  @@map("waitlists")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  oldData    Json?
+  newData    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

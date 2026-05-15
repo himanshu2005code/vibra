@@ -1,0 +1,31 @@
+{
+  "name": "eventsphere",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EventSphere — premium movie & live event booking platform for India",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:web": "npm run dev -w @eventsphere/web",
+    "dev:api": "npm run dev -w @eventsphere/api",
+    "build": "npm run build -w @eventsphere/database && npm run build -w @eventsphere/shared && npm run build -w @eventsphere/api && npm run build -w @eventsphere/web",
+    "db:generate": "npm run generate -w @eventsphere/database",
+    "db:migrate": "npm run migrate -w @eventsphere/database",
+    "db:seed": "npm run seed -w @eventsphere/database",
+    "db:studio": "npm run studio -w @eventsphere/database",
+    "test": "npm run test -w @eventsphere/api && npm run test -w @eventsphere/web",
+    "lint": "npm run lint -w @eventsphere/api && npm run lint -w @eventsphere/web",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
